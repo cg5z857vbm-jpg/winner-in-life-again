@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>☕️Xy-Habits - Habit Tracker</title>
+    <!-- Tailwind CSS for utility styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Babel for dynamic web app UI -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Google Fonts for Coffee Theme -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Quicksand:wght@500;600;700&family=Ultra&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-coffee-light: #F4ECE1;
+            --bg-coffee-card: #FAF5EF;
+            --espresso: #3E2723;
+            --espresso-dark: #2A1810;
+            --matcha: #8A9A5B;
+            --terracotta: #C05A46;
+        }
+
+        body {
+            background-color: var(--bg-coffee-light);
+            color: var(--espresso);
+            font-family: 'Quicksand', sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .font-retro-title {
+            font-family: 'Ultra', serif;
+            letter-spacing: 1px;
+        }
+
+        .font-serif-heading {
+            font-family: 'DM Serif Display', serif;
+        }
+
+        .coffee-card {
+            background-color: #FAF5EF;
+            border: 2px solid var(--espresso);
+            box-shadow: 3px 3px 0px 0px var(--espresso);
+            border-radius: 12px;
+        }
+
+        .coffee-button {
+            background-color: #E8D8C8;
+            border: 2px solid var(--espresso);
+            box-shadow: 2px 2px 0px 0px var(--espresso);
+            transition: all 0.12s ease-in-out;
+        }
+
+        .coffee-button:active {
+            transform: translate(1px, 1px);
+            box-shadow: 1px 1px 0px 0px var(--espresso);
+        }
+
+        /* Custom compact scrollbar for calendar grid */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #E8D8C8;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: var(--espresso);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const MONTH_NAMES = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        const CATEGORIES = ["Morning", "Afternoon", "Evening", "Anytime"];
+
+        const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+
+        const formatDateKey = (year, month, day) => {
+            return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        };
+
+        function useLocalStorage(key, initialValue) {
+            const [storedValue, setStoredValue] = useState(() => {
+                try {
+                    const item = window.localStorage.getItem(key);
+                    return item ? JSON.parse(item) : initialValue;
+                } catch (error) {
+                    console.error(`Error reading localStorage key "${key}":`, error);
+                    return initialValue;
+                }
+            });
+
+            useEffect(() => {
+                try {
+                    window.localStorage.setItem(key, JSON.stringify(storedValue));
+                } catch (error) {
+                    console.error(`Error writing localStorage key "${key}":`, error);
+                }
+            }, [key, storedValue]);
+
+            return [storedValue, setStoredValue];
+        }
+
+        function App() {
+            const [habits, setHabits] = useLocalStorage('xy_habits_list', [
+                { id: 'h1', name: 'Drink Water', category: 'Morning', createdAt: Date.now() },
+                { id: 'h2', name: 'Read 10 Pages', category: 'Evening', createdAt: Date.now() + 1 }
+            ]);
+            const [logs, setLogs] = useLocalStorage('xy_habits_logs', {});
+            const [goals, setGoals] = useLocalStorage('xy_habits_goals', {});
+
+            const [activeTab, setActiveTab] = useState('monthly');
+            const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+            const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+
+            const handleAddHabit = (name, category) => {
+                if (!name.trim()) return;
+                const newHabit = {
+                    id: 'habit_' + Date.now(),
+                    name: name.trim(),
+                    category: category || 'Anytime',
+                    createdAt: Date.now()
+                };
+                setHabits(prev => [...prev, newHabit]);
+            };
+
+            const handleDeleteHabit = (habitId) => {
+                setHabits(prev => prev.filter(h => h.id !== habitId));
+            };
+
+            const handleToggleLog = (habitId, dateStr) => {
+                const key = `${habitId}_${dateStr}`;
+                setLogs(prev => {
+                    const current = prev[key];
+                    const updated = { ...prev };
+                    
+                    if (!current) {
+                        updated[key] = 'completed';
+                    } else if (current === 'completed') {
+                        updated[key] = 'missed';
+                    } else {
+                        delete updated[key];
+                    }
+                    return updated;
+                });
+            };
+
+            const handleUpdateGoal = (habitId, year, month, goalText) => {
+                const key = `${habitId}_${year}_${month}`;
+                setGoals(prev => ({
+                    ...prev,
+                    [key]: goalText
+                }));
+            };
+
+            return (
+                <div className="max-w-[1300px] mx-auto px-2 sm:px-4 py-4">
+                    {/* Compact Header */}
+                    <header className="text-center mb-4 flex flex-col sm:flex-row items-center justify-between gap-2 border-b-2 border-[#3E2723]/20 pb-3">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-[#FAF5EF] border-2 border-[#3E2723] rounded-xl px-4 py-1.5 shadow-[2px_2px_0px_0px_#3E2723]">
+                                <h1 className="text-2xl sm:text-3xl font-retro-title text-[#3E2723] tracking-wide">
+                                    Xy-Habits
+                                </h1>
+                            </div>
+                            <span className="font-serif-heading text-xs sm:text-sm text-[#3E2723] uppercase font-bold tracking-wider hidden md:inline-block">
+                                ☕ Daily Tracker ☕
+                            </span>
+                        </div>
+
+                        {/* Navigation Tabs */}
+                        <div className="bg-[#FAF5EF] border-2 border-[#3E2723] p-1 rounded-full shadow-[2px_2px_0px_0px_#3E2723] flex space-x-1">
+                            <button
+                                onClick={() => setActiveTab('monthly')}
+                                className={`px-4 py-1 rounded-full font-bold text-xs sm:text-sm transition-all ${
+                                    activeTab === 'monthly'
+                                        ? 'bg-[#3E2723] text-[#FAF5EF]'
+                                        : 'text-[#3E2723] hover:bg-[#E8D8C8]'
+                                }`}
+                            >
+                                Monthly View
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('yearly')}
+                                className={`px-4 py-1 rounded-full font-bold text-xs sm:text-sm transition-all ${
+                                    activeTab === 'yearly'
+                                        ? 'bg-[#3E2723] text-[#FAF5EF]'
+                                        : 'text-[#3E2723] hover:bg-[#E8D8C8]'
+                                }`}
+                            >
+                                Yearly View
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Active View Component */}
+                    {activeTab === 'monthly' ? (
+                        <MonthlyView
+                            habits={habits}
+                            logs={logs}
+                            currentYear={currentYear}
+                            setCurrentYear={setCurrentYear}
+                            currentMonth={currentMonth}
+                            setCurrentMonth={setCurrentMonth}
+                            onAddHabit={handleAddHabit}
+                            onDeleteHabit={handleDeleteHabit}
+                            onToggleLog={handleToggleLog}
+                        />
+                    ) : (
+                        <YearlyView
+                            habits={habits}
+                            logs={logs}
+                            goals={goals}
+                            currentYear={currentYear}
+                            setCurrentYear={setCurrentYear}
+                            onToggleLog={handleToggleLog}
+                            onUpdateGoal={handleUpdateGoal}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function MonthlyView({ habits, logs, currentYear, setCurrentYear, currentMonth, setCurrentMonth, onAddHabit, onDeleteHabit, onToggleLog }) {
+            const [newHabitName, setNewHabitName] = useState('');
+            const [newCategory, setNewCategory] = useState('Morning');
+
+            const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+            const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+            const handlePrevMonth = () => {
+                if (currentMonth === 0) {
+                    setCurrentMonth(11);
+                    setCurrentYear(y => y - 1);
+                } else {
+                    setCurrentMonth(m => m - 1);
+                }
+            };
+
+            const handleNextMonth = () => {
+                if (currentMonth === 11) {
+                    setCurrentMonth(0);
+                    setCurrentYear(y => y + 1);
+                } else {
+                    setCurrentMonth(m => m + 1);
+                }
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onAddHabit(newHabitName, newCategory);
+                setNewHabitName('');
+            };
+
+            return (
+                <div className="coffee-card p-3 sm:p-4">
+                    {/* Month Controls & Add Habit Form */}
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-3 mb-3">
+                        <div className="flex items-center space-x-2 bg-[#E8D8C8] border-2 border-[#3E2723] rounded-full px-2 py-0.5 shadow-[1px_1px_0px_0px_#3E2723]">
+                            <button 
+                                onClick={handlePrevMonth}
+                                className="w-6 h-6 flex items-center justify-center bg-[#3E2723] text-[#FAF5EF] rounded-full font-bold text-xs hover:bg-[#5D3A34]"
+                            >
+                                &#8592;
+                            </button>
+                            <span className="font-serif-heading text-base font-bold uppercase min-w-[130px] text-center">
+                                {MONTH_NAMES[currentMonth]} {currentYear}
+                            </span>
+                            <button 
+                                onClick={handleNextMonth}
+                                className="w-6 h-6 flex items-center justify-center bg-[#3E2723] text-[#FAF5EF] rounded-full font-bold text-xs hover:bg-[#5D3A34]"
+                            >
+                                &#8594;
+                            </button>
+                        </div>
+
+                        {/* Add Habit Inputs */}
+                        <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full md:w-auto">
+                            <select
+                                value={newCategory}
+                                onChange={(e) => setNewCategory(e.target.value)}
+                                className="bg-[#E8D8C8] border-2 border-[#3E2723] rounded-lg py-1 px-2 font-bold text-xs text-[#3E2723] focus:outline-none"
+                            >
+                                {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                            <input
+                                type="text"
+                                placeholder="Add habit..."
+                                value={newHabitName}
+                                onChange={(e) => setNewHabitName(e.target.value)}
+                                className="flex-1 min-w-[140px] bg-[#E8D8C8] border-2 border-[#3E2723] rounded-lg py-1 px-2 font-bold text-xs text-[#3E2723] placeholder-[#3E2723]/60 focus:outline-none focus:bg-white"
+                            />
+                            <button
+                                type="submit"
+                                className="coffee-button px-3 py-1 rounded-lg font-bold text-xs text-[#3E2723] bg-[#E8D8C8] hover:bg-[#FAF5EF]"
+                            >
+                                + Add
+                            </button>
+                        </form>
+
+                        {/* Mini Legend */}
+                        <div className="flex items-center gap-3 text-xs font-bold">
+                            <div className="flex items-center gap-1">
+                                <span className="w-3.5 h-3.5 rounded-full border border-[#3E2723] bg-[#FAF5EF] inline-block"></span>
+                                <span className="text-[11px]">Empty</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="w-3.5 h-3.5 rounded-full border border-[#3E2723] bg-[#8A9A5B] inline-block"></span>
+                                <span className="text-[11px]">Done</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="w-3.5 h-3.5 rounded-full border border-[#3E2723] bg-[#C05A46] inline-block"></span>
+                                <span className="text-[11px]">Missed</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Compact Grid Table */}
+                    <div className="overflow-x-auto custom-scrollbar border-2 border-[#3E2723] rounded-lg bg-[#E8D8C8]">
+                        <table className="w-full text-left border-collapse table-fixed">
+                            <thead>
+                                <tr className="bg-[#FAF5EF] border-b-2 border-[#3E2723]">
+                                    <th className="p-1.5 border-r-2 border-[#3E2723] sticky left-0 z-20 bg-[#FAF5EF] w-[150px] min-w-[150px] font-serif-heading text-sm">
+                                        Habit
+                                    </th>
+                                    {daysArray.map(d => (
+                                        <th key={d} className="p-0.5 text-center w-[26px] min-w-[26px] font-bold text-[10px] border-r border-[#3E2723]/20">
+                                            {d}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {CATEGORIES.map(category => {
+                                    const categoryHabits = habits.filter(h => h.category === category);
+                                    if (categoryHabits.length === 0) return null;
+
+                                    return (
+                                        <React.Fragment key={category}>
+                                            <tr className="bg-[#3E2723] text-[#FAF5EF]">
+                                                <td colSpan={daysInMonth + 1} className="px-2 py-0.5 font-bold uppercase tracking-wider text-[10px] sticky left-0 z-10">
+                                                    ● {category}
+                                                </td>
+                                            </tr>
+
+                                            {categoryHabits.map(habit => (
+                                                <tr key={habit.id} className="border-b border-[#3E2723]/30 bg-[#FAF5EF]/70 hover:bg-[#FAF5EF]">
+                                                    <td className="p-1 border-r-2 border-[#3E2723] sticky left-0 z-10 bg-[#F4ECE1] font-bold text-xs flex justify-between items-center">
+                                                        <span className="truncate pr-1 text-[11px]">{habit.name}</span>
+                                                        <button
+                                                            onClick={() => onDeleteHabit(habit.id)}
+                                                            className="text-[#C05A46] hover:scale-125 transition-all font-extrabold px-1 text-sm leading-none"
+                                                            title="Delete Habit"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </td>
+                                                    {daysArray.map(day => {
+                                                        const dateStr = formatDateKey(currentYear, currentMonth, day);
+                                                        const status = logs[`${habit.id}_${dateStr}`];
+
+                                                        let circleBg = 'bg-[#FAF5EF]';
+                                                        if (status === 'completed') circleBg = 'bg-[#8A9A5B]';
+                                                        if (status === 'missed') circleBg = 'bg-[#C05A46]';
+
+                                                        return (
+                                                            <td key={day} className="p-0 text-center border-r border-[#3E2723]/10">
+                                                                <button
+                                                                    onClick={() => onToggleLog(habit.id, dateStr)}
+                                                                    className={`w-5 h-5 rounded-full border border-[#3E2723] ${circleBg} mx-auto block transition-transform active:scale-90`}
+                                                                />
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
+
+                                {habits.length === 0 && (
+                                    <tr>
+                                        <td colSpan={32} className="p-4 text-center text-[#3E2723]/70 font-bold text-xs">
+                                            No habits added yet. Type a habit name above and click "+ Add"!
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        function YearlyView({ habits, logs, goals, currentYear, setCurrentYear, onToggleLog, onUpdateGoal }) {
+            const [selectedHabitId, setSelectedHabitId] = useState(habits.length > 0 ? habits[0].id : null);
+
+            useEffect(() => {
+                if (!selectedHabitId && habits.length > 0) {
+                    setSelectedHabitId(habits[0].id);
+                }
+            }, [habits, selectedHabitId]);
+
+            if (habits.length === 0) {
+                return (
+                    <div className="coffee-card p-6 text-center font-bold text-sm">
+                        Please add a habit in the Monthly view first to track yearly progress!
+                    </div>
+                );
+            }
+
+            return (
+                <div className="coffee-card p-3 sm:p-4">
+                    {/* Header Controls */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+                        <div className="flex items-center space-x-1.5">
+                            <span className="bg-[#8A9A5B] text-[#FAF5EF] border border-[#3E2723] px-2 py-1 rounded font-bold text-[10px] uppercase tracking-wider">
+                                HABIT
+                            </span>
+                            <select
+                                value={selectedHabitId || ''}
+                                onChange={(e) => setSelectedHabitId(e.target.value)}
+                                className="flex-1 bg-[#E8D8C8] border border-[#3E2723] rounded py-1 px-2 font-bold text-xs text-[#3E2723] focus:outline-none"
+                            >
+                                {habits.map(h => (
+                                    <option key={h.id} value={h.id}>{h.name} ({h.category})</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex items-center space-x-1.5">
+                            <span className="bg-[#8A9A5B] text-[#FAF5EF] border border-[#3E2723] px-2 py-1 rounded font-bold text-[10px] uppercase tracking-wider">
+                                GOAL
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="Yearly goal..."
+                                value={goals[`${selectedHabitId}_${currentYear}_goal`] || ''}
+                                onChange={(e) => onUpdateGoal(selectedHabitId, currentYear, 'goal', e.target.value)}
+                                className="flex-1 bg-[#E8D8C8] border border-[#3E2723] rounded py-1 px-2 font-bold text-xs text-[#3E2723] placeholder-[#3E2723]/50 focus:outline-none"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-end space-x-1.5">
+                            <span className="bg-[#8A9A5B] text-[#FAF5EF] border border-[#3E2723] px-2 py-1 rounded font-bold text-[10px] uppercase tracking-wider">
+                                YEAR
+                            </span>
+                            <div className="flex items-center bg-[#E8D8C8] border border-[#3E2723] rounded px-1 py-0.5">
+                                <button onClick={() => setCurrentYear(y => y - 1)} className="px-1.5 font-bold text-xs hover:text-[#8A9A5B]">&larr;</button>
+                                <span className="font-bold px-2 text-xs">{currentYear}</span>
+                                <button onClick={() => setCurrentYear(y => y + 1)} className="px-1.5 font-bold text-xs hover:text-[#8A9A5B]">&rarr;</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Compact 12 Months Rows */}
+                    <div className="space-y-1.5">
+                        {MONTH_NAMES.map((monthName, monthIdx) => {
+                            const daysInThisMonth = getDaysInMonth(currentYear, monthIdx);
+                            let completedCount = 0;
+
+                            return (
+                                <div key={monthName} className="flex flex-col sm:flex-row items-center gap-1.5 bg-[#E8D8C8]/30 border border-[#3E2723] p-1.5 rounded-lg">
+                                    <div className="w-full sm:w-24 bg-[#FAF5EF] border border-[#3E2723] py-0.5 text-center rounded font-serif-heading uppercase text-xs font-bold tracking-wider shrink-0">
+                                        {monthName}
+                                    </div>
+
+                                    <div className="flex-1 flex flex-wrap gap-1 justify-start items-center">
+                                        {Array.from({ length: 31 }, (_, i) => i + 1).map(dayNum => {
+                                            const isAvailableDay = dayNum <= daysInThisMonth;
+                                            const dateStr = formatDateKey(currentYear, monthIdx, dayNum);
+                                            const status = isAvailableDay ? logs[`${selectedHabitId}_${dateStr}`] : null;
+
+                                            if (status === 'completed') completedCount++;
+
+                                            let circleStyle = 'bg-[#FAF5EF] text-[#3E2723]';
+                                            if (status === 'completed') circleStyle = 'bg-[#8A9A5B] text-white';
+                                            if (status === 'missed') circleStyle = 'bg-[#C05A46] text-white';
+
+                                            if (!isAvailableDay) {
+                                                return (
+                                                    <div key={dayNum} className="w-5 h-5 rounded-full border border-dashed border-[#3E2723]/20 bg-transparent flex items-center justify-center text-[9px] text-transparent select-none">
+                                                        -
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={dayNum}
+                                                    onClick={() => onToggleLog(selectedHabitId, dateStr)}
+                                                    className={`w-5 h-5 rounded-full border border-[#3E2723] ${circleStyle} flex items-center justify-center text-[9px] font-bold transition-transform hover:scale-110 active:scale-95`}
+                                                    title={`${monthName} ${dayNum}, ${currentYear}`}
+                                                >
+                                                    {dayNum}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="w-full sm:w-16 bg-[#FAF5EF] border border-[#3E2723] py-0.5 text-center rounded font-bold text-[10px] shrink-0">
+                                        {completedCount}/{daysInThisMonth}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
